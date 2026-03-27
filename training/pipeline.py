@@ -13,7 +13,11 @@ def build_pipeline(cfg):
     tokenizer = load_tokenizer(cfg.model_id)
     task = get_task_adapter(cfg, tokenizer)
 
-    train_ds, val_ds = task.build_tokenized_splits()
+    splits = task.build_splits()
+
+    train_ds = splits["train_tokenized"]
+    val_ds = splits["validation_tokenized"]
+    raw_val_ds = splits["validation_raw"]
 
     effective_batch_size = (
         cfg.per_device_train_batch_size * cfg.gradient_accumulation_steps
@@ -62,8 +66,10 @@ def build_pipeline(cfg):
         "model_config": model_config,
         "peft_config": peft_config,
         "tokenizer": tokenizer,
+        "task_adapter": task,
         "train_ds": train_dataset_for_trainer,
         "val_ds": val_ds,
+        "raw_val_ds": raw_val_ds,
         "curriculum_state": curriculum_state,
         "num_difficulty_levels": num_difficulty_levels,
         "max_steps": max_steps,

@@ -11,17 +11,18 @@ use_model_curriculum: true
 
 use_qlora: true
 lora_config:
-  r: 16
-  lora_alpha: 32
+  r: 32
+  lora_alpha: 64
   lora_dropout: 0.05
 
 max_seq_length: 512
+max_new_tokens: 8
 
 per_device_train_batch_size: 4
 per_device_eval_batch_size: 4
 gradient_accumulation_steps: 1
 
-learning_rate: 2.0e-4
+learning_rate: 1.0e-4
 lr_scheduler_type: linear
 warmup_ratio: 0.03
 logging_steps: 10
@@ -35,5 +36,6 @@ report_to: wandb
 wandb_config:
   project: curriculum_moe
   name: olmoe_arc_full_curriculum_qlora
+  group: olmoe_arc
 
 output_dir: ckpt/olmoe_arc_full_curriculum_qlora

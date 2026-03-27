@@ -1,3 +1,5 @@
+import re
+
 from datasets import ClassLabel, concatenate_datasets, load_dataset
 
 from data.base import BaseTaskAdapter
@@ -6,6 +8,8 @@ from data.base import BaseTaskAdapter
 NEGATION_WORDS = {"not", "except", "least", "never", "incorrect"}
 NUMERIC_CUES = {"percent", "percentage", "sum", "difference", "total", "average"}
 CAUSAL_CUES = {"why", "cause", "best explains", "most likely", "reason"}
+
+_LABEL_RE = re.compile(r"\b([A-D])\b", re.IGNORECASE)
 
 
 class ARCTaskAdapter(BaseTaskAdapter):
@@ -63,14 +67,13 @@ class ARCTaskAdapter(BaseTaskAdapter):
         return self._format_arc_row(example)
 
     def format_completion(self, example):
-        return f" {example['answerKey']}{self.tokenizer.eos_token}"
+        return f" {str(example['answerKey']).strip().upper()}{self.tokenizer.eos_token}"
 
     def split(self, ds):
         easy_train = ds["easy"]["train"]
         challenge_train = ds["challenge"]["train"]
         challenge_val = ds["challenge"]["validation"]
 
-        # Stage 0: all ARC-Easy
         easy_train = easy_train.map(
             lambda ex: {
                 "difficulty": 0,
@@ -79,7 +82,6 @@ class ARCTaskAdapter(BaseTaskAdapter):
             }
         )
 
-        # Score challenge train examples
         challenge_train = challenge_train.map(
             self._challenge_difficulty_batch,
             batched=True,
@@ -100,7 +102,6 @@ class ARCTaskAdapter(BaseTaskAdapter):
 
         challenge_train = challenge_train.map(assign_challenge_bucket)
 
-        # Validation uses challenge only; mark but do not care much about curriculum there.
         challenge_val = challenge_val.map(
             self._challenge_difficulty_batch,
             batched=True,
@@ -127,4 +128,37 @@ class ARCTaskAdapter(BaseTaskAdapter):
         return {
             "train": train_ds,
             "validation": challenge_val,
+        }
+
+    # ---- Task metric API ----
+
+    def has_task_metrics(self) -> bool:
+        return True
+
+    def get_metric_key(self) -> str:
+        return "accuracy"
+
+    def extract_gold_answer(self, example: dict) -> str:
+        return str(example["answerKey"]).strip().upper()
+
+    def extract_predicted_answer(self, generated_text: str):
+        text = generated_text.strip().upper()
+
+        matches = _LABEL_RE.findall(text)
+        if matches:
+            return matches[0]
+
+        if text:
+            first = text[0]
+            if first in {"A", "B", "C", "D"}:
+                return first
+
+        return None
+
+    def compute_rows_metrics(self, rows: list[dict]) -> dict:
+        total = len(rows)
+        correct = sum(int(row["correct"]) for row in rows)
+
+        return {
+            "accuracy": correct / total if total else 0.0,
         }

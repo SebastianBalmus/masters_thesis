@@ -1,11 +1,12 @@
-import os
 import yaml
+import wandb
 import argparse
 from dotmap import DotMap
 
 import torch
 from trl import SFTConfig
 from training.trainer import CurriculumSFTTrainer
+from training.metrics_callback import GenerativeEvalCallback
 
 from core.seed import set_seed
 from training.pipeline import build_pipeline
@@ -19,8 +20,12 @@ def main(cfg):
     cfg = DotMap(cfg)
 
     if cfg.report_to == "wandb":
-        os.environ["WANDB_PROJECT"] = cfg.wandb_config.project
-        os.environ["WANDB_NAME"] = cfg.wandb_config.name
+        wandb.init(
+            project=cfg.wandb_config.project,
+            name=cfg.wandb_config.name,
+            group=cfg.wandb_config.group,
+            config=cfg.toDict(),
+        )
 
     set_seed(cfg.seed)
 
@@ -54,6 +59,19 @@ def main(cfg):
                     default_topk=pipeline["default_topk"],
                 )
             )
+
+    enable_task_metrics = bool(cfg.get("enable_task_metrics_during_training", True))
+
+    if enable_task_metrics and pipeline["task_adapter"].has_task_metrics():
+        callbacks.append(
+            GenerativeEvalCallback(
+                task_adapter=pipeline["task_adapter"],
+                tokenizer=pipeline["tokenizer"],
+                raw_eval_dataset=pipeline["raw_val_ds"],
+                batch_size=cfg.per_device_eval_batch_size,
+                max_new_tokens=int(cfg.get("eval_max_new_tokens", 16)),
+            )
+        )
 
     training_args = SFTConfig(
         output_dir=cfg.output_dir,

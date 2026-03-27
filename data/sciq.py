@@ -1,9 +1,12 @@
+import re
 import hashlib
 import random
 
 from datasets import ClassLabel, load_dataset
 
 from data.base import BaseTaskAdapter
+
+_LABEL_RE = re.compile(r"\b([A-D])\b", re.IGNORECASE)
 
 
 class SciQTaskAdapter(BaseTaskAdapter):
@@ -111,3 +114,29 @@ class SciQTaskAdapter(BaseTaskAdapter):
     def format_completion(self, example):
         _, correct_label = self._build_choices(example)
         return f" {correct_label}{self.tokenizer.eos_token}"
+
+    def has_task_metrics(self) -> bool:
+        return True
+
+    def get_metric_key(self) -> str:
+        return "accuracy"
+
+    def extract_gold_answer(self, example: dict) -> str:
+        _, correct_label = self._build_choices(example)
+        return correct_label
+
+    def extract_predicted_answer(self, generated_text: str):
+        text = generated_text.strip().upper()
+        matches = _LABEL_RE.findall(text)
+        if matches:
+            return matches[0]
+        if text and text[0] in {"A", "B", "C", "D"}:
+            return text[0]
+        return None
+
+    def compute_rows_metrics(self, rows: list[dict]) -> dict:
+        total = len(rows)
+        correct = sum(int(row["correct"]) for row in rows)
+        return {
+            "accuracy": correct / total if total else 0.0,
+        }

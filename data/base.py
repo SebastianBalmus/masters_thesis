@@ -27,6 +27,17 @@ class BaseTaskAdapter(ABC):
     def format_completion(self, example: dict) -> str:
         pass
 
+    def has_task_metrics(self) -> bool:
+        return False
+
+    def get_metric_key(self) -> str:
+        return "eval_loss"
+
+    def compute_generative_metrics(
+        self, model, tokenizer, dataset, batch_size: int
+    ) -> dict:
+        raise NotImplementedError("This task does not implement task-specific metrics.")
+
     def tokenize_example(self, example: dict) -> dict:
         prompt_text = self.format_prompt(example)
         completion_text = self.format_completion(example)
@@ -59,17 +70,22 @@ class BaseTaskAdapter(ABC):
             "difficulty": example["difficulty"],
         }
 
-    def build_tokenized_splits(self):
-        ds = self.load_raw()
-        ds = self.add_difficulty(ds)
-        split_ds = self.split(ds)
+    def build_splits(self):
+        raw = self.load_raw()
+        split_ds = self.split(raw)
 
-        train_ds = split_ds["train"].map(
+        tokenized_train = split_ds["train"].map(
             self.tokenize_example,
             remove_columns=split_ds["train"].column_names,
         )
-        val_ds = split_ds["validation"].map(
+        tokenized_val = split_ds["validation"].map(
             self.tokenize_example,
             remove_columns=split_ds["validation"].column_names,
         )
-        return train_ds, val_ds
+
+        return {
+            "train_raw": split_ds["train"],
+            "validation_raw": split_ds["validation"],
+            "train_tokenized": tokenized_train,
+            "validation_tokenized": tokenized_val,
+        }
