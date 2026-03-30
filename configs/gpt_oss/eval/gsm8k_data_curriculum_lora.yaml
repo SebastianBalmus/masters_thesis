@@ -1,0 +1,17 @@
+model_id: openai/gpt-oss-20b
+run_name: gpt_oss_gsm8k_data_curriculum_lora
+
+checkpoint:
+  mode: lora_adapter
+  path: ckpt/gpt_oss_gsm8k_data_curriculum_lora/final_adapter
+
+eval:
+  benchmark: gsm8k
+  results_dir: eval_results
+  batch_size: 8
+  max_new_tokens: 128
+  split: test
+  limit: null
+  few_shot: false
+  temperature: 0.0
+  do_sample: false

@@ -1,0 +1,23 @@
+model_id: Qwen/Qwen1.5-MoE-A2.7B-Chat
+seed: 42
+
+checkpoint:
+  mode: base
+  path: null
+
+eval:
+  benchmark: sciq
+  split: test
+  results_dir: eval_results
+  run_name: sciq_base
+
+  batch_size: 16
+  max_new_tokens: 8
+  limit: null
+
+  do_sample: false
+  temperature: 0.0
+
+  sort_by_length: true
+  compile_model: false
+  attn_implementation: sdpa

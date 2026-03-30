@@ -1,0 +1,22 @@
+model_id: allenai/OLMoE-1B-7B-0924-Instruct
+run_name: olmoe_arc_full_curriculum_lora
+
+checkpoint:
+  mode: lora_adapter
+  path: ckpt/olmoe_arc_full_curriculum_lora/final_adapter
+
+eval:
+  benchmark: arc
+  split: test
+  results_dir: eval_results
+
+  batch_size: 16
+  max_new_tokens: 8
+  limit: null
+
+  do_sample: false
+  temperature: 0.0
+
+  sort_by_length: true
+  compile_model: false
+  attn_implementation: sdpa

@@ -1,0 +1,22 @@
+model_id: microsoft/Phi-mini-MoE-instruct
+run_name: phi_arc_data_curriculum_lora
+
+checkpoint:
+  mode: lora_adapter
+  path: ckpt/phi_arc_data_curriculum_lora/final_adapter
+
+eval:
+  benchmark: arc
+  split: test
+  results_dir: eval_results
+
+  batch_size: 16
+  max_new_tokens: 8
+  limit: null
+
+  do_sample: false
+  temperature: 0.0
+
+  sort_by_length: true
+  compile_model: false
+  attn_implementation: sdpa

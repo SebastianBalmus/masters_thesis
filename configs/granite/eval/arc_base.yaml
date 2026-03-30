@@ -1,0 +1,22 @@
+model_id: ibm-granite/granite-4.0-h-tiny
+
+checkpoint:
+  mode: base
+  path: null
+
+eval:
+  benchmark: arc
+  split: test
+  results_dir: eval_results
+  run_name: arc_base
+
+  batch_size: 16
+  max_new_tokens: 8
+  limit: null
+
+  do_sample: false
+  temperature: 0.0
+
+  sort_by_length: true
+  compile_model: false
+  attn_implementation: sdpa

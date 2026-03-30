@@ -114,8 +114,13 @@ def main(cfg):
     trainer = CurriculumSFTTrainer(**trainer_kwargs)
     trainer.train()
 
-    trainer.model.save_pretrained(f"{cfg.output_dir}/final_adapter")
-    pipeline["tokenizer"].save_pretrained(f"{cfg.output_dir}/final_adapter")
+    final_artifact_dir = (
+        f"{cfg.output_dir}/final_adapter"
+        if pipeline["peft_config"] is not None
+        else f"{cfg.output_dir}/final_model"
+    )
+    trainer.model.save_pretrained(final_artifact_dir)
+    pipeline["tokenizer"].save_pretrained(final_artifact_dir)
 
 
 if __name__ == "__main__":
