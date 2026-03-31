@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-MODELS=(olmoe qwen gpt_oss)
+MODELS=(olmoe qwen lfm2 gpt_oss)
 TASKS=(gsm8k arc sciq)
 METHODS=(no_curriculum model_curriculum data_curriculum full_curriculum)
 
