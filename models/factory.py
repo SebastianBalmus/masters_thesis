@@ -15,8 +15,11 @@ def get_dtype():
     )
 
 
-def load_tokenizer(model_id: str):
-    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+def load_tokenizer(model_id: str, trust_remote_code: bool = True):
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_id,
+        trust_remote_code=trust_remote_code,
+    )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
@@ -26,14 +29,18 @@ def load_tokenizer(model_id: str):
 def build_model(cfg):
     model_id = cfg.model_id
     dtype = get_dtype()
-    config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+    trust_remote_code = bool(cfg.get("trust_remote_code", True))
+    config = AutoConfig.from_pretrained(
+        model_id,
+        trust_remote_code=trust_remote_code,
+    )
     use_lora = bool(cfg.get("use_lora", False))
 
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
         config=config,
         torch_dtype=dtype,
-        trust_remote_code=True,
+        trust_remote_code=trust_remote_code,
     )
 
     peft_config = None
@@ -44,7 +51,7 @@ def build_model(cfg):
             lora_dropout=cfg.lora_config.lora_dropout,
             bias="none",
             task_type="CAUSAL_LM",
-            target_modules="all-linear",
+            target_modules=cfg.lora_config.get("target_modules", "all-linear"),
         )
 
     model.config.use_cache = False

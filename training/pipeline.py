@@ -10,7 +10,10 @@ from training.collator import CausalLMCollator
 
 
 def build_pipeline(cfg):
-    tokenizer = load_tokenizer(cfg.model_id)
+    tokenizer = load_tokenizer(
+        cfg.model_id,
+        trust_remote_code=bool(cfg.get("trust_remote_code", True)),
+    )
     task = get_task_adapter(cfg, tokenizer)
 
     splits = task.build_splits()

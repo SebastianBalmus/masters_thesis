@@ -13,6 +13,7 @@ use_lora: true
 lora_config:
   r: 32
   lora_alpha: 64
+  target_modules: all-linear
   lora_dropout: 0.05
 
 max_seq_length: 512
