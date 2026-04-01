@@ -3,6 +3,7 @@ from transformers import (
     AutoConfig,
     AutoTokenizer,
     AutoModelForCausalLM,
+    Mxfp4Config,
 )
 from peft import LoraConfig
 
@@ -26,6 +27,10 @@ def load_tokenizer(model_id: str, trust_remote_code: bool = True):
     return tokenizer
 
 
+def is_gpt_oss_model(model_id: str) -> bool:
+    return "gpt-oss" in str(model_id).lower()
+
+
 def build_model(cfg):
     model_id = cfg.model_id
     dtype = get_dtype()
@@ -41,6 +46,9 @@ def build_model(cfg):
         config=config,
         torch_dtype=dtype,
         trust_remote_code=trust_remote_code,
+        quantization_config=(
+            Mxfp4Config(dequantize=True) if is_gpt_oss_model(model_id) else None
+        ),
     )
 
     peft_config = None

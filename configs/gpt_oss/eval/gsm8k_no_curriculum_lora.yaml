@@ -15,3 +15,4 @@ eval:
   few_shot: false
   temperature: 0.0
   do_sample: false
+  attn_implementation: eager

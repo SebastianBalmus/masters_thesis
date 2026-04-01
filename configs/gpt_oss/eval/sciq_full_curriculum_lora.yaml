@@ -20,4 +20,4 @@ eval:
 
   sort_by_length: true
   compile_model: false
-  attn_implementation: sdpa
+  attn_implementation: eager

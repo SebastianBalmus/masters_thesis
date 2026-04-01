@@ -2,8 +2,20 @@
 
 set -euo pipefail
 
+wait_for_gpu_free() {
+  local threshold_mb=2000
+  while true; do
+    used_mb=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | head -n1)
+    if [[ "${used_mb}" -lt "${threshold_mb}" ]]; then
+      break
+    fi
+    echo "GPU memory still high (${used_mb} MB). Waiting..."
+    sleep 5
+  done
+}
+
 MODELS=(olmoe qwen lfm2 gpt_oss)
-TASKS=(gsm8k arc sciq)
+TASKS=(arc sciq gsm8k)
 VARIANTS=(base no_curriculum data_curriculum model_curriculum full_curriculum)
 
 TOTAL_RUNS=$((${#MODELS[@]} * ${#TASKS[@]} * ${#VARIANTS[@]}))
@@ -23,9 +35,12 @@ for model in "${MODELS[@]}"; do
         config_path="configs/${model}/eval/${task}_${variant}_lora.yaml"
       fi
 
+      wait_for_gpu_free
       echo "Starting evaluation: ${config_path}"
       python eval.py -c "${config_path}"
+      sleep 10
       echo "Finished evaluation: ${config_path}"
+      wait_for_gpu_free
     done
   done
 
