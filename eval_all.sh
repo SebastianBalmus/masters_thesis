@@ -16,7 +16,17 @@ wait_for_gpu_free() {
 
 MODELS=(olmoe qwen lfm2 gpt_oss)
 TASKS=(arc sciq gsm8k)
-VARIANTS=(base no_curriculum data_curriculum model_curriculum full_curriculum)
+VARIANTS=(
+  base
+  fixed_k_max
+  fixed_k_1
+  linear_k_1_to_topk
+  warmup
+  linear_mid_start
+  frontloaded
+  backloaded
+  jump_warmup
+)
 
 TOTAL_RUNS=$((${#MODELS[@]} * ${#TASKS[@]} * ${#VARIANTS[@]}))
 

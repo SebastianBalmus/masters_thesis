@@ -4,6 +4,10 @@ from trl import SFTTrainer
 
 
 class CurriculumSFTTrainer(SFTTrainer):
+    def __init__(self, *args, moe_metrics_collector=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.moe_metrics_collector = moe_metrics_collector
+
     def _prepare_dataset(
         self,
         dataset,
@@ -39,6 +43,9 @@ class CurriculumSFTTrainer(SFTTrainer):
         if self.train_dataset is None:
             raise ValueError("Trainer requires a train_dataset.")
 
+        if not isinstance(self.train_dataset, TorchIterableDataset):
+            return super().get_train_dataloader()
+
         return DataLoader(
             self.train_dataset,
             batch_size=self.args.per_device_train_batch_size,
@@ -46,3 +53,35 @@ class CurriculumSFTTrainer(SFTTrainer):
             num_workers=0,
             pin_memory=self.args.dataloader_pin_memory,
         )
+
+    def compute_loss(
+        self,
+        model,
+        inputs,
+        return_outputs=False,
+        num_items_in_batch=None,
+    ):
+        try:
+            try:
+                loss, outputs = super().compute_loss(
+                    model,
+                    inputs,
+                    return_outputs=True,
+                    num_items_in_batch=num_items_in_batch,
+                )
+            except TypeError:
+                loss, outputs = super().compute_loss(
+                    model,
+                    inputs,
+                    return_outputs=True,
+                )
+        finally:
+            pass
+
+        if self.moe_metrics_collector is not None and bool(model.training):
+            self.moe_metrics_collector.attach_model(model)
+            self.moe_metrics_collector.update_from_outputs(outputs)
+
+        if return_outputs:
+            return loss, outputs
+        return loss

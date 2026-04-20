@@ -1,0 +1,22 @@
+model_id: openai/gpt-oss-20b
+run_name: gpt_oss_arc_fixed_k_max_lora
+
+checkpoint:
+  mode: lora_adapter
+  path: ckpt/gpt_oss_arc_fixed_k_max_lora/final_adapter
+
+eval:
+  benchmark: arc
+  split: test
+  results_dir: eval_results
+
+  batch_size: 16
+  max_new_tokens: 8
+  limit: null
+
+  do_sample: false
+  temperature: 0.0
+
+  sort_by_length: true
+  compile_model: false
+  attn_implementation: eager

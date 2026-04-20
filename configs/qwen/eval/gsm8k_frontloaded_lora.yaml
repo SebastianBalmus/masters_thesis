@@ -1,0 +1,17 @@
+model_id: Qwen/Qwen1.5-MoE-A2.7B-Chat
+run_name: qwen_gsm8k_frontloaded_lora
+
+checkpoint:
+  mode: lora_adapter
+  path: ckpt/qwen_gsm8k_frontloaded_lora/final_adapter
+
+eval:
+  benchmark: gsm8k
+  results_dir: eval_results
+  batch_size: 8
+  max_new_tokens: 128
+  split: test
+  limit: null
+  few_shot: false
+  temperature: 0.0
+  do_sample: false

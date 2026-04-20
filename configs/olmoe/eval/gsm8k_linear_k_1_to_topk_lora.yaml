@@ -1,0 +1,17 @@
+model_id: allenai/OLMoE-1B-7B-0924-Instruct
+run_name: olmoe_gsm8k_linear_k_1_to_topk_lora
+
+checkpoint:
+  mode: lora_adapter
+  path: ckpt/olmoe_gsm8k_linear_k_1_to_topk_lora/final_adapter
+
+eval:
+  benchmark: gsm8k
+  results_dir: eval_results
+  batch_size: 8
+  max_new_tokens: 128
+  split: test
+  limit: null
+  few_shot: false
+  temperature: 0.0
+  do_sample: false
