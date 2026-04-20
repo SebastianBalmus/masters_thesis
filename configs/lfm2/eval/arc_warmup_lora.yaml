@@ -1,0 +1,22 @@
+model_id: LiquidAI/LFM2-8B-A1B
+run_name: lfm2_arc_warmup_lora
+
+checkpoint:
+  mode: lora_adapter
+  path: ckpt/lfm2_arc_warmup_lora/final_adapter
+
+eval:
+  benchmark: arc
+  split: test
+  results_dir: eval_results
+
+  batch_size: 16
+  max_new_tokens: 8
+  limit: null
+
+  do_sample: false
+  temperature: 0.0
+
+  sort_by_length: true
+  compile_model: false
+  attn_implementation: sdpa

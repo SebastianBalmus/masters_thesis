@@ -39,6 +39,8 @@ def build_model(cfg):
         model_id,
         trust_remote_code=trust_remote_code,
     )
+    if hasattr(config, "output_router_logits"):
+        config.output_router_logits = True
     use_lora = bool(cfg.get("use_lora", False))
 
     model = AutoModelForCausalLM.from_pretrained(
@@ -63,4 +65,6 @@ def build_model(cfg):
         )
 
     model.config.use_cache = False
+    if hasattr(model.config, "output_router_logits"):
+        model.config.output_router_logits = True
     return model, config, peft_config

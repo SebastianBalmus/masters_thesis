@@ -4,10 +4,14 @@ This repository contains a config-driven training and evaluation pipeline for su
 
 The codebase supports:
 
-- standard SFT without curriculum
-- data curriculum over example difficulty
-- model curriculum via stage-wise MoE top-k routing
-- combined data + model curriculum
+- fixed MoE routing at the model default top-k
+- fixed MoE routing at `k=1`
+- linear MoE routing curriculum from `k=1` to the model default top-k
+- linear MoE routing curriculum from `k=floor(topk/2)` to the model default top-k
+- warmup routing from `k=1` to the model default top-k during an initial configurable fraction of training
+- frontloaded MoE routing curriculum with less time at low `k` and more time at high `k`
+- backloaded MoE routing curriculum with more time at low `k` and less time at high `k`
+- jump warmup routing that stays at `k=1` for an initial configurable fraction of training, then switches to the model default top-k
 - LoRA-based fine-tuning
 - base-model and fine-tuned-model evaluation
 
@@ -40,7 +44,7 @@ The repository already contains:
 .
 ├── configs/                 # Train and eval YAMLs grouped by model family
 ├── core/                    # Shared utilities such as seeding
-├── curriculum/              # Curriculum state, iterable datasets, callbacks
+├── curriculum/              # Model-curriculum state and callbacks
 ├── data/                    # Dataset adapters for GSM8K, ARC, SciQ
 ├── evaluation/              # Benchmark adapters, model loading, eval runner
 ├── models/                  # Model loading and MoE capability helpers
@@ -87,15 +91,14 @@ Useful optional environment variables:
 Training is fully driven by YAML configs:
 
 ```bash
-python sft.py -c configs/qwen/train/arc_no_curriculum_lora.yaml
+python sft.py -c configs/qwen/train/arc_fixed_k_max_lora.yaml
 ```
 
 Each training config specifies:
 
 - the base model via `model_id`
 - the dataset via `dataset_id`
-- whether data curriculum is enabled via `use_data_curriculum`
-- whether model curriculum is enabled via `use_model_curriculum`
+- the routing method via `routing_method`
 - whether LoRA is enabled via `use_lora`
 - optimization and evaluation settings
 - checkpoint and logging destinations
@@ -106,8 +109,7 @@ Representative training fields:
 model_id: Qwen/Qwen1.5-MoE-A2.7B-Chat
 dataset_id: allenai/ai2_arc
 
-use_data_curriculum: false
-use_model_curriculum: false
+routing_method: fixed_k_max
 
 use_lora: true
 lora_config:
@@ -120,7 +122,7 @@ per_device_train_batch_size: 4
 per_device_eval_batch_size: 4
 gradient_accumulation_steps: 1
 
-output_dir: ckpt/qwen_arc_no_curriculum_lora
+output_dir: ckpt/qwen_arc_fixed_k_max_lora
 ```
 
 ### Training Outputs
@@ -136,36 +138,43 @@ Intermediate checkpoints are also saved according to the config's `save_steps`.
 
 ### Curriculum Behavior
 
-This repository implements two distinct curriculum mechanisms.
+This repository implements eight MoE routing methods:
 
-`use_data_curriculum: true`
+- `fixed_k_max`: keep routing fixed at the model's default `num_experts_per_tok`
+- `fixed_k_1`: keep routing fixed at `k=1`
+- `linear_k_1_to_topk`: start at `k=1` and increase one integer at a time until the model's default top-k, with equal training-step allocation per `k`
+- `linear_mid_start`: same as `linear_k_1_to_topk`, but starts at `k=floor(topk/2)`
+- `warmup`: linearly increase from `k=1` to the model default top-k during the initial `routing_transition_ratio` fraction of steps, then stay at the default top-k
+- `frontloaded`: use stage weights `[1, 2, ..., K]`, so training spends less time at low `k` and more time near the default top-k
+- `backloaded`: use stage weights `[K, K-1, ..., 1]`, so training spends more time at low `k` and less time near the default top-k
+- `jump_warmup`: keep `k=1` during the initial `routing_transition_ratio` fraction of steps, then jump to the model default top-k
 
-- the training dataset is wrapped in a curriculum-aware iterable dataset
-- sampling progresses over difficulty levels during training
+Training runs for exactly one epoch on the train split. During that epoch the trainer:
 
-`use_model_curriculum: true`
+- evaluates periodically on validation
+- saves checkpoints periodically
+- tracks the best validation accuracy and step
 
-- only valid for models whose config exposes `num_experts_per_tok`
-- routing top-k is adjusted stage by stage during training
-- if enabled on a model that does not support MoE routing control, training raises an error
+After training it evaluates both the best-validation checkpoint and the final checkpoint on the test split, then writes a run summary with:
 
-If model curriculum is disabled but the model still supports MoE routing control, the training code fixes routing to the model's default top-k.
+- `best_val_accuracy`
+- `best_step`
+- `test_accuracy_at_best`
+- `test_accuracy_at_final`
+- `train_runtime`
+- `final_step`
+- the routing `k` value recorded at each validation evaluation step
 
 ### Task Metrics During Training
 
-Train configs expose `enable_task_metrics_during_training`.
-
-- when `true`, the trainer runs a lightweight generative evaluation callback on the validation split during training
-- when `false`, training skips this extra benchmark-style validation loop
-
-The current configs set this to `false` by default.
+This protocol requires task-specific validation accuracy, so training always runs the lightweight generative evaluation callback on the validation split.
 
 ## Evaluation
 
 Evaluation is also config-driven:
 
 ```bash
-python eval.py -c configs/qwen/eval/arc_no_curriculum_lora.yaml
+python eval.py -c configs/qwen/eval/arc_fixed_k_max_lora.yaml
 ```
 
 The evaluation entry point currently expects CUDA and will raise an error if no GPU is available.
@@ -184,7 +193,7 @@ model_id: Qwen/Qwen1.5-MoE-A2.7B-Chat
 
 checkpoint:
   mode: lora_adapter
-  path: ckpt/qwen_arc_no_curriculum_lora/final_adapter
+  path: ckpt/qwen_arc_fixed_k_max_lora/final_adapter
 
 eval:
   benchmark: arc
@@ -233,24 +242,36 @@ Each model family follows the same directory structure:
 ```text
 configs/<model_family>/
 ├── train/
-│   ├── <task>_no_curriculum_lora.yaml
-│   ├── <task>_data_curriculum_lora.yaml
-│   ├── <task>_model_curriculum_lora.yaml
-│   └── <task>_full_curriculum_lora.yaml
+│   ├── <task>_fixed_k_max_lora.yaml
+│   ├── <task>_fixed_k_1_lora.yaml
+│   ├── <task>_linear_k_1_to_topk_lora.yaml
+│   ├── <task>_linear_mid_start_lora.yaml
+│   ├── <task>_warmup_lora.yaml
+│   ├── <task>_frontloaded_lora.yaml
+│   ├── <task>_backloaded_lora.yaml
+│   └── <task>_jump_warmup_lora.yaml
 └── eval/
     ├── <task>_base.yaml
-    ├── <task>_no_curriculum_lora.yaml
-    ├── <task>_data_curriculum_lora.yaml
-    ├── <task>_model_curriculum_lora.yaml
-    └── <task>_full_curriculum_lora.yaml
+    ├── <task>_fixed_k_max_lora.yaml
+    ├── <task>_fixed_k_1_lora.yaml
+    ├── <task>_linear_k_1_to_topk_lora.yaml
+    ├── <task>_linear_mid_start_lora.yaml
+    ├── <task>_warmup_lora.yaml
+    ├── <task>_frontloaded_lora.yaml
+    ├── <task>_backloaded_lora.yaml
+    └── <task>_jump_warmup_lora.yaml
 ```
 
 The naming convention is consistent across the repo:
 
-- `no_curriculum`: plain LoRA fine-tuning
-- `data_curriculum`: curriculum over example difficulty only
-- `model_curriculum`: curriculum over MoE routing only
-- `full_curriculum`: data curriculum plus model curriculum
+- `fixed_k_max`: fixed routing at the model default top-k
+- `fixed_k_1`: fixed routing at `k=1`
+- `linear_k_1_to_topk`: linear top-k curriculum from `1` to the model default
+- `linear_mid_start`: linear top-k curriculum from `floor(topk/2)` to the model default
+- `warmup`: linear warmup from `1` to the model default during the initial `routing_transition_ratio`
+- `frontloaded`: weighted top-k curriculum with stage weights `[1, 2, ..., K]`
+- `backloaded`: weighted top-k curriculum with stage weights `[K, K-1, ..., 1]`
+- `jump_warmup`: hold `k=1` during the initial `routing_transition_ratio`, then jump to the model default
 - `base`: base-model evaluation only
 
 ## Batch Scripts
@@ -267,7 +288,7 @@ This runs sequential training over:
 
 - models: `olmoe`, `qwen`, `lfm2`, `gpt_oss`
 - tasks: `gsm8k`, `arc`, `sciq`
-- methods: `no_curriculum`, `model_curriculum`, `data_curriculum`, `full_curriculum`
+- methods: `fixed_k_max`, `fixed_k_1`, `linear_k_1_to_topk`, `linear_mid_start`, `warmup`, `frontloaded`, `backloaded`, `jump_warmup`
 
 and writes timing data to:
 
@@ -285,20 +306,20 @@ This runs sequential evaluation over:
 
 - models: `olmoe`, `qwen`, `lfm2`, `gpt_oss`
 - tasks: `gsm8k`, `arc`, `sciq`
-- variants: `base`, `no_curriculum`, `data_curriculum`, `model_curriculum`, `full_curriculum`
+- variants: `base`, `fixed_k_max`, `fixed_k_1`, `linear_k_1_to_topk`, `linear_mid_start`, `warmup`, `frontloaded`, `backloaded`, `jump_warmup`
 
 ## Typical Workflows
 
 Train one configuration:
 
 ```bash
-python sft.py -c configs/gpt_oss/train/gsm8k_full_curriculum_lora.yaml
+python sft.py -c configs/gpt_oss/train/gsm8k_linear_k_1_to_topk_lora.yaml
 ```
 
 Evaluate the resulting LoRA adapter:
 
 ```bash
-python eval.py -c configs/gpt_oss/eval/gsm8k_full_curriculum_lora.yaml
+python eval.py -c configs/gpt_oss/eval/gsm8k_linear_k_1_to_topk_lora.yaml
 ```
 
 Evaluate the base model for comparison:

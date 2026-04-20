@@ -3,8 +3,17 @@
 set -euo pipefail
 
 MODELS=(olmoe qwen lfm2 gpt_oss)
-TASKS=(gsm8k arc sciq)
-METHODS=(no_curriculum model_curriculum data_curriculum full_curriculum)
+TASKS=(arc sciq gsm8k)
+METHODS=(
+  # fixed_k_max
+  # fixed_k_1
+  # linear_k_1_to_topk
+  frontloaded
+  backloaded
+  linear_mid_start
+  warmup
+  jump_warmup
+)
 
 TOTAL_RUNS=$((${#MODELS[@]} * ${#TASKS[@]} * ${#METHODS[@]}))
 LOG_DIR="logs"

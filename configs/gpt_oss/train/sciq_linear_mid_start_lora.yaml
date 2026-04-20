@@ -1,0 +1,40 @@
+model_id: openai/gpt-oss-20b
+dataset_id: allenai/sciq
+
+seed: 42
+
+routing_method: linear_mid_start
+
+use_lora: true
+lora_config:
+  r: 32
+  lora_alpha: 64
+  target_modules: all-linear
+  lora_dropout: 0.05
+
+max_seq_length: 512
+max_new_tokens: 8
+
+per_device_train_batch_size: 4
+per_device_eval_batch_size: 4
+gradient_accumulation_steps: 1
+
+learning_rate: 1.0e-4
+lr_scheduler_type: linear
+warmup_ratio: 0.03
+logging_steps: 10
+eval_strategy: steps
+eval_steps: 100
+save_strategy: steps
+save_steps: 100
+
+enable_task_metrics_during_training: true
+
+report_to: wandb
+
+wandb_config:
+  project: routing_curriculum
+  name: gpt_oss_sciq_linear_mid_start_lora
+  group: gpt_oss_sciq
+
+output_dir: ckpt/gpt_oss_sciq_linear_mid_start_lora

@@ -6,8 +6,6 @@ from tqdm import tqdm
 
 from evaluation.utils import batchify, num_batches
 
-from pathlib import Path
-
 
 def build_eval_run_name(cfg) -> str:
     custom_name = getattr(cfg, "run_name", None)
@@ -65,10 +63,7 @@ def generate_batch(model, tokenizer, prompts, cfg):
     else:
         generate_kwargs["num_beams"] = 1
 
-    try:
-        outputs = model.generate(cache_implementation="static", **generate_kwargs)
-    except Exception:
-        outputs = model.generate(**generate_kwargs)
+    outputs = model.generate(**generate_kwargs)
 
     prompt_len = enc["input_ids"].shape[1]
     gen_only = outputs[:, prompt_len:]

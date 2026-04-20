@@ -12,10 +12,6 @@ class BaseTaskAdapter(ABC):
         pass
 
     @abstractmethod
-    def add_difficulty(self, ds: Dataset) -> Dataset:
-        pass
-
-    @abstractmethod
     def split(self, ds: Dataset) -> DatasetDict:
         pass
 
@@ -67,7 +63,6 @@ class BaseTaskAdapter(ABC):
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "labels": labels,
-            "difficulty": example["difficulty"],
         }
 
     def build_splits(self):
