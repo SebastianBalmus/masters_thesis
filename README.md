@@ -20,7 +20,6 @@ The repository currently includes:
 - one analysis notebook: `notebooks/eval_metric_runtime_deltas.ipynb`
 - a Conda environment definition in `environment.yml`
 
-Generated outputs such as checkpoints, logs, W&B state, and evaluation result directories are intentionally not part of the tracked repo scope.
 
 ## Repository Layout
 
