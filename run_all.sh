@@ -5,9 +5,9 @@ set -euo pipefail
 MODELS=(olmoe qwen lfm2 gpt_oss)
 TASKS=(arc sciq gsm8k)
 METHODS=(
-  # fixed_k_max
-  # fixed_k_1
-  # linear_k_1_to_topk
+  fixed_k_max
+  fixed_k_1
+  linear_k_1_to_topk
   frontloaded
   backloaded
   linear_mid_start
