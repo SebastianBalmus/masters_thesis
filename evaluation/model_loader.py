@@ -1,13 +1,28 @@
-import torch
-from peft import PeftModel
-from transformers import AutoModelForCausalLM, AutoTokenizer
 from pathlib import Path
 
 import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from models.moe import set_top_k
 
 torch.set_float32_matmul_precision("high")
+
+
+def should_force_eval_topk_one(cfg) -> bool:
+    routing_method = getattr(cfg, "routing_method", None)
+    if routing_method is not None:
+        return str(routing_method) == "fixed_k_1"
+
+    run_name = str(getattr(cfg, "run_name", "") or "")
+    checkpoint_path = str(getattr(getattr(cfg, "checkpoint", None), "path", "") or "")
+    return "fixed_k_1" in run_name or "fixed_k_1" in checkpoint_path
+
+
+def maybe_apply_eval_topk_override(model, cfg):
+    if should_force_eval_topk_one(cfg):
+        set_top_k(model, k=1)
+        return 1
+    return None
 
 
 def get_torch_dtype():
@@ -103,6 +118,7 @@ def load_model_for_eval(cfg):
 
     if mode == "base":
         model = load_base_model(model_id, attn_implementation=attn_implementation)
+        forced_topk = maybe_apply_eval_topk_override(model, cfg)
         model.eval()
         model = maybe_compile_model(model, compile_model)
 
@@ -111,6 +127,7 @@ def load_model_for_eval(cfg):
             "base_model_name_or_path": model_id,
             "checkpoint_path": None,
             "peft_merged": False,
+            "forced_topk": forced_topk,
         }
 
     if mode == "lora_adapter":
@@ -127,6 +144,7 @@ def load_model_for_eval(cfg):
         except Exception as e:
             print(f"Warning: merge_and_unload failed; using adapter as-is. Error: {e}")
 
+        forced_topk = maybe_apply_eval_topk_override(model, cfg)
         model.eval()
         model = maybe_compile_model(model, compile_model)
 
@@ -135,6 +153,7 @@ def load_model_for_eval(cfg):
             "base_model_name_or_path": model_id,
             "checkpoint_path": ckpt_path,
             "peft_merged": merged,
+            "forced_topk": forced_topk,
         }
 
     if mode == "full_model":
@@ -142,6 +161,7 @@ def load_model_for_eval(cfg):
             ckpt_path,
             attn_implementation=attn_implementation,
         )
+        forced_topk = maybe_apply_eval_topk_override(model, cfg)
         model.eval()
         model = maybe_compile_model(model, compile_model)
 
@@ -150,6 +170,7 @@ def load_model_for_eval(cfg):
             "base_model_name_or_path": ckpt_path,
             "checkpoint_path": ckpt_path,
             "peft_merged": False,
+            "forced_topk": forced_topk,
         }
 
     raise ValueError(f"Unsupported checkpoint.mode: {mode}")

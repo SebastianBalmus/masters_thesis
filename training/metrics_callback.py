@@ -277,7 +277,6 @@ class ValidationTrackingCallback(TrainerCallback):
 
     def get_summary(
         self,
-        test_accuracy_at_best,
         test_accuracy_at_final,
         train_runtime,
         final_step: int,
@@ -285,7 +284,6 @@ class ValidationTrackingCallback(TrainerCallback):
         return {
             "best_val_accuracy": self.best_val_accuracy,
             "best_step": self.best_step,
-            "test_accuracy_at_best": test_accuracy_at_best,
             "test_accuracy_at_final": test_accuracy_at_final,
             "train_runtime": None if train_runtime is None else float(train_runtime),
             "final_step": int(final_step),

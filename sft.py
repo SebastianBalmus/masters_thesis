@@ -2,7 +2,6 @@ import yaml
 import wandb
 import argparse
 import gc
-from pathlib import Path
 from dotmap import DotMap
 
 import torch
@@ -35,6 +34,10 @@ ROUTING_METHOD_LINEAR_MID_START = "linear_mid_start"
 ROUTING_METHOD_FRONTLOADED = "frontloaded"
 ROUTING_METHOD_BACKLOADED = "backloaded"
 ROUTING_METHOD_JUMP_WARMUP = "jump_warmup"
+
+
+def seed_suffix(seed: int) -> str:
+    return f"__seed_{int(seed)}"
 
 
 def resolve_routing_method(cfg):
@@ -156,6 +159,7 @@ def build_post_train_eval_cfg(cfg, checkpoint_mode: str, checkpoint_path: str, r
             "seed": cfg.seed,
             "model_id": cfg.model_id,
             "run_name": run_name,
+            "routing_method": resolve_routing_method(cfg),
             "checkpoint": {
                 "mode": checkpoint_mode,
                 "path": checkpoint_path,
@@ -223,6 +227,13 @@ def extract_accuracy(metrics: dict, metric_key: str):
 
 def main(cfg):
     cfg = DotMap(cfg)
+    suffix = seed_suffix(cfg.seed)
+
+    cfg.output_dir = f"{cfg.output_dir}{suffix}"
+    if "run_name" in cfg and cfg.run_name is not None:
+        cfg.run_name = f"{cfg.run_name}{suffix}"
+    if "wandb_config" in cfg and cfg.wandb_config is not None and "name" in cfg.wandb_config:
+        cfg.wandb_config.name = f"{cfg.wandb_config.name}{suffix}"
 
     if cfg.report_to == "wandb":
         wandb.init(
@@ -278,7 +289,7 @@ def main(cfg):
     if routing_callback is not None:
         callbacks.append(routing_callback)
 
-    enable_task_metrics = bool(cfg.get("enable_task_metrics_during_training", True))
+    enable_task_metrics = bool(cfg.get("enable_task_metrics_during_training", False))
     task_metric_eval_steps = cfg.get("task_metric_eval_steps", cfg.eval_steps)
     generative_eval_callback = None
 
@@ -319,6 +330,7 @@ def main(cfg):
         routing_callback=routing_callback,
     )
     callbacks.append(tracking_callback)
+    eval_strategy = "steps" if enable_task_metrics else "epoch"
 
     training_args = SFTConfig(
         output_dir=cfg.output_dir,
@@ -330,7 +342,7 @@ def main(cfg):
         lr_scheduler_type=cfg.lr_scheduler_type,
         warmup_ratio=cfg.warmup_ratio,
         logging_steps=cfg.logging_steps,
-        eval_strategy="steps",
+        eval_strategy=eval_strategy,
         eval_steps=cfg.eval_steps,
         save_strategy="steps",
         save_steps=cfg.eval_steps,
@@ -376,7 +388,6 @@ def main(cfg):
 
     final_step = int(trainer.state.global_step)
     train_runtime = train_result.metrics.get("train_runtime")
-    best_step = tracking_callback.best_step
     task_metric_key = pipeline["task_adapter"].get_metric_key()
     is_peft_model = pipeline["peft_config"] is not None
 
@@ -406,31 +417,7 @@ def main(cfg):
         task_metric_key,
     )
 
-    best_checkpoint_dir = None
-    if best_step is not None:
-        candidate = f"{cfg.output_dir}/checkpoint-{best_step}"
-        best_checkpoint_dir = candidate if Path(candidate).is_dir() else None
-
-        if best_checkpoint_dir is None and best_step == final_step:
-            best_checkpoint_dir = final_artifact_dir
-
-    test_accuracy_at_best = None
-    if best_checkpoint_dir is not None:
-        best_run_name = f"{run_name_base}__best"
-        best_checkpoint_mode = "lora_adapter" if is_peft_model else "full_model"
-        best_test_metrics = run_checkpoint_test_eval(
-            cfg=cfg,
-            checkpoint_mode=best_checkpoint_mode,
-            checkpoint_path=best_checkpoint_dir,
-            run_name=best_run_name,
-        )
-        test_accuracy_at_best = extract_accuracy(
-            best_test_metrics,
-            task_metric_key,
-        )
-
     summary = tracking_callback.get_summary(
-        test_accuracy_at_best=test_accuracy_at_best,
         test_accuracy_at_final=test_accuracy_at_final,
         train_runtime=train_runtime,
         final_step=final_step,
@@ -446,9 +433,18 @@ if __name__ == "__main__":
         type=str,
         default="configs/sft_config.yaml",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Override the training seed from the config file.",
+    )
     args = parser.parse_args()
 
     with open(args.config_path, "r") as f:
         cfg = yaml.safe_load(f)
+
+    if args.seed is not None:
+        cfg["seed"] = args.seed
 
     main(cfg)

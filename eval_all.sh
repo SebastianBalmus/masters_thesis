@@ -17,7 +17,6 @@ wait_for_gpu_free() {
 MODELS=(olmoe qwen lfm2 gpt_oss)
 TASKS=(arc sciq gsm8k)
 VARIANTS=(
-  base
   fixed_k_max
   fixed_k_1
   linear_k_1_to_topk
@@ -39,12 +38,7 @@ for model in "${MODELS[@]}"; do
     echo "Running ${task} evaluation configs for ${model}"
 
     for variant in "${VARIANTS[@]}"; do
-      if [[ "${variant}" == "base" ]]; then
-        config_path="configs/${model}/eval/${task}_base.yaml"
-      else
-        config_path="configs/${model}/eval/${task}_${variant}_lora.yaml"
-      fi
-
+      config_path="configs/${model}/eval/${task}_${variant}_lora.yaml"
       wait_for_gpu_free
       echo "Starting evaluation: ${config_path}"
       python eval.py -c "${config_path}"

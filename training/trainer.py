@@ -62,21 +62,18 @@ class CurriculumSFTTrainer(SFTTrainer):
         num_items_in_batch=None,
     ):
         try:
-            try:
-                loss, outputs = super().compute_loss(
-                    model,
-                    inputs,
-                    return_outputs=True,
-                    num_items_in_batch=num_items_in_batch,
-                )
-            except TypeError:
-                loss, outputs = super().compute_loss(
-                    model,
-                    inputs,
-                    return_outputs=True,
-                )
-        finally:
-            pass
+            loss, outputs = super().compute_loss(
+                model,
+                inputs,
+                return_outputs=True,
+                num_items_in_batch=num_items_in_batch,
+            )
+        except TypeError:
+            loss, outputs = super().compute_loss(
+                model,
+                inputs,
+                return_outputs=True,
+            )
 
         if self.moe_metrics_collector is not None and bool(model.training):
             self.moe_metrics_collector.attach_model(model)
