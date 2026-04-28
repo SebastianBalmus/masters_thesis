@@ -1,4 +1,5 @@
 import json
+import time
 from pathlib import Path
 
 import torch
@@ -101,6 +102,7 @@ def run_evaluation(cfg, model, tokenizer, benchmark, load_info):
     metrics_path = out_dir / "metrics.json"
 
     rows = []
+    inference_runtime_seconds = 0.0
 
     with predictions_path.open("w", encoding="utf-8") as pred_f:
         for batch_examples in tqdm(
@@ -109,7 +111,9 @@ def run_evaluation(cfg, model, tokenizer, benchmark, load_info):
             desc=f"Evaluating {cfg.eval.benchmark}",
         ):
             prompts = [benchmark.format_prompt(ex) for ex in batch_examples]
+            started_at = time.perf_counter()
             generations = generate_batch(model, tokenizer, prompts, cfg)
+            inference_runtime_seconds += time.perf_counter() - started_at
 
             for ex, prompt, gen_text in zip(batch_examples, prompts, generations):
                 gold = benchmark.extract_gold_answer(ex)
@@ -154,6 +158,7 @@ def run_evaluation(cfg, model, tokenizer, benchmark, load_info):
             "split": cfg.eval.split,
             "batch_size": cfg.eval.batch_size,
             "max_new_tokens": cfg.eval.max_new_tokens,
+            "inference_runtime_seconds": float(inference_runtime_seconds),
             "checkpoint_mode": cfg.checkpoint.mode,
             "checkpoint_path": cfg.checkpoint.path,
             "model_id": cfg.model_id,

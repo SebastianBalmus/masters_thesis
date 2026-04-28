@@ -1,3 +1,5 @@
+import time
+
 from torch.utils.data import DataLoader
 from torch.utils.data import IterableDataset as TorchIterableDataset
 from trl import SFTTrainer
@@ -7,6 +9,8 @@ class CurriculumSFTTrainer(SFTTrainer):
     def __init__(self, *args, moe_metrics_collector=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.moe_metrics_collector = moe_metrics_collector
+        self.training_step_runtime_seconds = 0.0
+        self.validation_runtime_seconds = 0.0
 
     def _prepare_dataset(
         self,
@@ -82,3 +86,37 @@ class CurriculumSFTTrainer(SFTTrainer):
         if return_outputs:
             return loss, outputs
         return loss
+
+    def training_step(self, model, inputs, num_items_in_batch=None):
+        started_at = time.perf_counter()
+        try:
+            return super().training_step(
+                model,
+                inputs,
+                num_items_in_batch=num_items_in_batch,
+            )
+        except TypeError:
+            return super().training_step(model, inputs)
+        finally:
+            self.training_step_runtime_seconds += time.perf_counter() - started_at
+
+    def evaluate(self, *args, **kwargs):
+        started_at = time.perf_counter()
+        try:
+            return super().evaluate(*args, **kwargs)
+        finally:
+            self.validation_runtime_seconds += time.perf_counter() - started_at
+
+    def train(self, *args, **kwargs):
+        self.training_step_runtime_seconds = 0.0
+        self.validation_runtime_seconds = 0.0
+
+        train_result = super().train(*args, **kwargs)
+        if hasattr(train_result, "metrics") and isinstance(train_result.metrics, dict):
+            train_result.metrics["training_runtime_seconds"] = float(
+                self.training_step_runtime_seconds
+            )
+            train_result.metrics["validation_runtime_seconds"] = float(
+                self.validation_runtime_seconds
+            )
+        return train_result

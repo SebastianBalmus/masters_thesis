@@ -278,14 +278,30 @@ class ValidationTrackingCallback(TrainerCallback):
     def get_summary(
         self,
         test_accuracy_at_final,
-        train_runtime,
+        training_runtime_seconds,
+        validation_runtime_seconds,
+        inference_runtime_seconds,
         final_step: int,
     ) -> dict:
         return {
             "best_val_accuracy": self.best_val_accuracy,
             "best_step": self.best_step,
             "test_accuracy_at_final": test_accuracy_at_final,
-            "train_runtime": None if train_runtime is None else float(train_runtime),
+            "training_runtime_seconds": (
+                None
+                if training_runtime_seconds is None
+                else float(training_runtime_seconds)
+            ),
+            "validation_runtime_seconds": (
+                None
+                if validation_runtime_seconds is None
+                else float(validation_runtime_seconds)
+            ),
+            "inference_runtime_seconds": (
+                None
+                if inference_runtime_seconds is None
+                else float(inference_runtime_seconds)
+            ),
             "final_step": int(final_step),
             "curriculum_k_at_each_eval_step": self.eval_history,
         }

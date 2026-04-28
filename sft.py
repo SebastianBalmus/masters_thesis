@@ -387,7 +387,8 @@ def main(cfg):
     trainer.evaluate()
 
     final_step = int(trainer.state.global_step)
-    train_runtime = train_result.metrics.get("train_runtime")
+    training_runtime_seconds = train_result.metrics.get("training_runtime_seconds")
+    validation_runtime_seconds = train_result.metrics.get("validation_runtime_seconds")
     task_metric_key = pipeline["task_adapter"].get_metric_key()
     is_peft_model = pipeline["peft_config"] is not None
 
@@ -416,13 +417,21 @@ def main(cfg):
         final_test_metrics,
         task_metric_key,
     )
+    inference_runtime_seconds = final_test_metrics.get("inference_runtime_seconds")
 
     summary = tracking_callback.get_summary(
         test_accuracy_at_final=test_accuracy_at_final,
-        train_runtime=train_runtime,
+        training_runtime_seconds=training_runtime_seconds,
+        validation_runtime_seconds=validation_runtime_seconds,
+        inference_runtime_seconds=inference_runtime_seconds,
         final_step=final_step,
     )
     tracking_callback.write_summary(summary)
+
+    if wandb.run is not None:
+        for key, value in summary.items():
+            if isinstance(value, (int, float)) or value is None:
+                wandb.run.summary[key] = value
 
 
 if __name__ == "__main__":
