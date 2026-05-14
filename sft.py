@@ -357,7 +357,7 @@ def main(cfg):
         logging_steps=cfg.logging_steps,
         eval_strategy=eval_strategy,
         eval_steps=cfg.eval_steps,
-        save_strategy="steps",
+        save_strategy="no",
         save_steps=cfg.eval_steps,
         report_to=cfg.report_to,
         remove_unused_columns=False,

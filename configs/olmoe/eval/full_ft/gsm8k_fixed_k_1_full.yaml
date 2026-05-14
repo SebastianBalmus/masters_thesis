@@ -2,8 +2,8 @@ model_id: allenai/OLMoE-1B-7B-0924-Instruct
 run_name: olmoe_gsm8k_fixed_k_1_full
 
 checkpoint:
-  mode: full_adapter
-  path: ckpt/olmoe_gsm8k_fixed_k_1_full/final_adapter
+  mode: full_model
+  path: ckpt/olmoe_gsm8k_fixed_k_1_full/final_model
 
 eval:
   benchmark: gsm8k

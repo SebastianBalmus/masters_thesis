@@ -2,8 +2,8 @@ model_id: LiquidAI/LFM2-8B-A1B
 run_name: lfm2_sciq_fixed_k_max_full
 
 checkpoint:
-  mode: full_adapter
-  path: ckpt/lfm2_sciq_fixed_k_max_full/final_adapter
+  mode: full_model
+  path: ckpt/lfm2_sciq_fixed_k_max_full/final_model
 
 eval:
   benchmark: sciq

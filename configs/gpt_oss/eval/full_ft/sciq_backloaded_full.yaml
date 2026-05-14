@@ -2,8 +2,8 @@ model_id: openai/gpt-oss-20b
 run_name: gpt_oss_sciq_backloaded_full
 
 checkpoint:
-  mode: full_adapter
-  path: ckpt/gpt_oss_sciq_backloaded_full/final_adapter
+  mode: full_model
+  path: ckpt/gpt_oss_sciq_backloaded_full/final_model
 
 eval:
   benchmark: sciq

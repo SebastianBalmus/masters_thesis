@@ -2,8 +2,8 @@ model_id: Qwen/Qwen1.5-MoE-A2.7B-Chat
 run_name: qwen_sciq_frontloaded_full
 
 checkpoint:
-  mode: full_adapter
-  path: ckpt/qwen_sciq_frontloaded_full/final_adapter
+  mode: full_model
+  path: ckpt/qwen_sciq_frontloaded_full/final_model
 
 eval:
   benchmark: sciq

@@ -1,10 +1,12 @@
 import json
 import time
+from contextlib import nullcontext
 from pathlib import Path
 
 import torch
 from tqdm import tqdm
 
+from core.router_logits import temporarily_disable_router_logits
 from evaluation.utils import batchify, num_batches
 
 
@@ -39,6 +41,12 @@ def pin_and_move_to_device(batch_tensors, device):
     return moved
 
 
+def router_logits_generation_context(model, cfg):
+    if cfg.checkpoint.mode == "full_model":
+        return temporarily_disable_router_logits(model)
+    return nullcontext()
+
+
 @torch.inference_mode()
 def generate_batch(model, tokenizer, prompts, cfg):
     enc = tokenizer(
@@ -64,7 +72,8 @@ def generate_batch(model, tokenizer, prompts, cfg):
     else:
         generate_kwargs["num_beams"] = 1
 
-    outputs = model.generate(**generate_kwargs)
+    with router_logits_generation_context(model, cfg):
+        outputs = model.generate(**generate_kwargs)
 
     prompt_len = enc["input_ids"].shape[1]
     gen_only = outputs[:, prompt_len:]

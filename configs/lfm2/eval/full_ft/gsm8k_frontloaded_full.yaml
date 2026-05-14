@@ -2,8 +2,8 @@ model_id: LiquidAI/LFM2-8B-A1B
 run_name: lfm2_gsm8k_frontloaded_full
 
 checkpoint:
-  mode: full_adapter
-  path: ckpt/lfm2_gsm8k_frontloaded_full/final_adapter
+  mode: full_model
+  path: ckpt/lfm2_gsm8k_frontloaded_full/final_model
 
 eval:
   benchmark: gsm8k
