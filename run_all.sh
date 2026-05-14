@@ -40,6 +40,7 @@ case "${FT_MODE}" in
 esac
 
 MODELS=(olmoe qwen lfm2 gpt_oss)
+FSDP_MODELS=(qwen gpt_oss)
 TASKS=(arc sciq gsm8k)
 SEEDS=(42 123 999)
 METHODS=(
@@ -64,6 +65,22 @@ echo "Total trainings to run: ${TOTAL_RUNS}"
 echo "Fine-tuning mode: ${FT_MODE}"
 echo "Timing log: ${TIMING_LOG}"
 echo "Delete checkpoints after each run: ${DELETE_CHECKPOINTS}"
+echo "FSDP processes for large full_ft runs: ${FSDP_NUM_PROCESSES:-2}"
+
+uses_fsdp_for_model() {
+  local model="$1"
+  if [[ "${FT_MODE}" != "full_ft" ]]; then
+    return 1
+  fi
+
+  for fsdp_model in "${FSDP_MODELS[@]}"; do
+    if [[ "${model}" == "${fsdp_model}" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
 
 for model in "${MODELS[@]}"; do
   echo "Running sequential training for model family: ${model}"
@@ -83,7 +100,11 @@ for model in "${MODELS[@]}"; do
         echo "Starting training: ${config_path} (seed=${seed})"
         start_epoch=$(date +%s)
         start_utc=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-        python sft.py -c "${config_path}" --seed "${seed}"
+        if uses_fsdp_for_model "${model}"; then
+          accelerate launch --num_processes "${FSDP_NUM_PROCESSES:-2}" sft.py -c "${config_path}" --seed "${seed}" --fsdp
+        else
+          python sft.py -c "${config_path}" --seed "${seed}"
+        fi
         end_epoch=$(date +%s)
         end_utc=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
         total_duration_seconds=$((end_epoch - start_epoch))

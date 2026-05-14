@@ -1,4 +1,5 @@
 import math
+import os
 
 from data.factory import get_task_adapter
 from models.factory import build_model, load_tokenizer
@@ -19,8 +20,9 @@ def build_pipeline(cfg):
     val_ds = splits["validation_tokenized"]
     raw_val_ds = splits["validation_raw"]
 
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
     effective_batch_size = (
-        cfg.per_device_train_batch_size * cfg.gradient_accumulation_steps
+        cfg.per_device_train_batch_size * cfg.gradient_accumulation_steps * world_size
     )
     max_steps = math.ceil(len(train_ds) / effective_batch_size)
 
