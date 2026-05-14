@@ -1,0 +1,22 @@
+model_id: Qwen/Qwen1.5-MoE-A2.7B-Chat
+run_name: qwen_arc_backloaded_full
+
+checkpoint:
+  mode: full_adapter
+  path: ckpt/qwen_arc_backloaded_full/final_adapter
+
+eval:
+  benchmark: arc
+  split: test
+  results_dir: eval_results
+
+  batch_size: 16
+  max_new_tokens: 8
+  limit: null
+
+  do_sample: false
+  temperature: 0.0
+
+  sort_by_length: true
+  compile_model: false
+  attn_implementation: sdpa

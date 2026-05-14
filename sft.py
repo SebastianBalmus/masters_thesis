@@ -25,7 +25,6 @@ from evaluation.benchmarks.factory import get_benchmark_adapter
 from evaluation.model_loader import load_model_for_eval, load_tokenizer_for_eval
 from evaluation.runner import run_evaluation
 
-
 ROUTING_METHOD_FIXED_MAX = "fixed_k_max"
 ROUTING_METHOD_FIXED_ONE = "fixed_k_1"
 ROUTING_METHOD_LINEAR = "linear_k_1_to_topk"
@@ -153,7 +152,9 @@ def dataset_id_to_benchmark_name(dataset_id: str) -> str:
     return mapping[dataset_id]
 
 
-def build_post_train_eval_cfg(cfg, checkpoint_mode: str, checkpoint_path: str, run_name: str):
+def build_post_train_eval_cfg(
+    cfg, checkpoint_mode: str, checkpoint_path: str, run_name: str
+):
     return DotMap(
         {
             "seed": cfg.seed,
@@ -168,7 +169,9 @@ def build_post_train_eval_cfg(cfg, checkpoint_mode: str, checkpoint_path: str, r
                 "benchmark": dataset_id_to_benchmark_name(cfg.dataset_id),
                 "results_dir": cfg.get("results_dir", "eval_results"),
                 "batch_size": int(
-                    cfg.get("post_train_eval_batch_size", cfg.per_device_eval_batch_size)
+                    cfg.get(
+                        "post_train_eval_batch_size", cfg.per_device_eval_batch_size
+                    )
                 ),
                 "max_new_tokens": int(cfg.max_new_tokens),
                 "split": "test",
@@ -184,7 +187,9 @@ def build_post_train_eval_cfg(cfg, checkpoint_mode: str, checkpoint_path: str, r
     )
 
 
-def run_checkpoint_test_eval(cfg, checkpoint_mode: str, checkpoint_path: str, run_name: str):
+def run_checkpoint_test_eval(
+    cfg, checkpoint_mode: str, checkpoint_path: str, run_name: str
+):
     eval_cfg = build_post_train_eval_cfg(
         cfg=cfg,
         checkpoint_mode=checkpoint_mode,
@@ -221,7 +226,9 @@ def release_training_memory():
 
 def extract_accuracy(metrics: dict, metric_key: str):
     if metric_key not in metrics:
-        raise KeyError(f"Expected metric {metric_key!r} in metrics: {list(metrics.keys())}")
+        raise KeyError(
+            f"Expected metric {metric_key!r} in metrics: {list(metrics.keys())}"
+        )
     return float(metrics[metric_key])
 
 
@@ -232,7 +239,11 @@ def main(cfg):
     cfg.output_dir = f"{cfg.output_dir}{suffix}"
     if "run_name" in cfg and cfg.run_name is not None:
         cfg.run_name = f"{cfg.run_name}{suffix}"
-    if "wandb_config" in cfg and cfg.wandb_config is not None and "name" in cfg.wandb_config:
+    if (
+        "wandb_config" in cfg
+        and cfg.wandb_config is not None
+        and "name" in cfg.wandb_config
+    ):
         cfg.wandb_config.name = f"{cfg.wandb_config.name}{suffix}"
 
     if cfg.report_to == "wandb":
@@ -305,7 +316,9 @@ def main(cfg):
         )
         callbacks.append(generative_eval_callback)
     elif not pipeline["task_adapter"].has_task_metrics():
-        raise ValueError("This training protocol requires task-specific validation accuracy.")
+        raise ValueError(
+            "This training protocol requires task-specific validation accuracy."
+        )
 
     metric_name = f"eval_{pipeline['task_adapter'].get_metric_key()}"
     if pipeline["supports_moe"] and pipeline["default_topk"] is not None:
@@ -393,7 +406,6 @@ def main(cfg):
     is_peft_model = pipeline["peft_config"] is not None
 
     run_name_base = cfg.get("run_name", cfg.wandb_config.name)
-    final_run_name = f"{run_name_base}__final"
     final_checkpoint_mode = "lora_adapter" if is_peft_model else "full_model"
 
     trainer = None
@@ -411,7 +423,7 @@ def main(cfg):
         cfg=cfg,
         checkpoint_mode=final_checkpoint_mode,
         checkpoint_path=final_artifact_dir,
-        run_name=final_run_name,
+        run_name=run_name_base,
     )
     test_accuracy_at_final = extract_accuracy(
         final_test_metrics,
