@@ -69,7 +69,9 @@ def resolve_fsdp_transformer_layer_cls(cfg, model=None) -> str:
 
     no_split_modules = getattr(model, "_no_split_modules", None)
     if no_split_modules:
-        return str(no_split_modules[0])
+        if isinstance(no_split_modules, str):
+            return no_split_modules
+        return str(sorted(no_split_modules)[0])
 
     model_id = str(cfg.model_id).lower()
     for key, layer_cls in DEFAULT_FSDP_TRANSFORMER_LAYERS.items():
@@ -90,16 +92,28 @@ def build_fsdp_training_args(cfg, model=None) -> dict:
     if not bool(cfg.get("use_full", False)):
         raise ValueError("Set use_full: true when enabling FSDP.")
 
-    transformer_layer_cls = resolve_fsdp_transformer_layer_cls(cfg, model=model)
+    auto_wrap = bool(cfg.get("fsdp_auto_wrap", True))
+    fsdp_config = {
+        "activation_checkpointing": bool(
+            cfg.get("fsdp_activation_checkpointing", auto_wrap)
+        ),
+        "state_dict_type": "FULL_STATE_DICT",
+        "use_orig_params": bool(cfg.get("fsdp_use_orig_params", True)),
+    }
+
+    if not auto_wrap:
+        return {
+            "fsdp": "full_shard",
+            "fsdp_config": fsdp_config,
+        }
+
+    fsdp_config["transformer_layer_cls_to_wrap"] = resolve_fsdp_transformer_layer_cls(
+        cfg, model=model
+    )
     return {
         "fsdp": "full_shard auto_wrap",
         "fsdp_config": {
-            "transformer_layer_cls_to_wrap": transformer_layer_cls,
-            "activation_checkpointing": bool(
-                cfg.get("fsdp_activation_checkpointing", True)
-            ),
-            "state_dict_type": "FULL_STATE_DICT",
-            "use_orig_params": bool(cfg.get("fsdp_use_orig_params", True)),
+            **fsdp_config,
         },
     }
 
@@ -546,6 +560,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Disable FSDP even if the config enables it.",
     )
+    parser.add_argument(
+        "--fsdp-no-auto-wrap",
+        action="store_true",
+        help="Use plain FSDP full_shard without transformer-layer auto-wrap.",
+    )
     args = parser.parse_args()
 
     with open(args.config_path, "r") as f:
@@ -559,5 +578,7 @@ if __name__ == "__main__":
         cfg["fsdp"] = True
     if args.no_fsdp:
         cfg["fsdp"] = False
+    if args.fsdp_no_auto_wrap:
+        cfg["fsdp_auto_wrap"] = False
 
     main(cfg)
