@@ -118,6 +118,13 @@ def build_fsdp_training_args(cfg, model=None) -> dict:
     }
 
 
+def resolve_gradient_checkpointing_enabled(cfg, fsdp_training_args: dict) -> bool:
+    fsdp_config = fsdp_training_args.get("fsdp_config", {})
+    if bool(fsdp_config.get("activation_checkpointing", False)):
+        return False
+    return bool(cfg.get("gradient_checkpointing", True))
+
+
 def resolve_routing_method(cfg):
     return str(cfg.get("routing_method", ROUTING_METHOD_FIXED_MAX))
 
@@ -425,6 +432,9 @@ def main(cfg):
     eval_strategy = "steps" if enable_task_metrics else "epoch"
 
     fsdp_training_args = build_fsdp_training_args(cfg, model=pipeline["model"])
+    gradient_checkpointing = resolve_gradient_checkpointing_enabled(
+        cfg, fsdp_training_args
+    )
     training_args = SFTConfig(
         output_dir=cfg.output_dir,
         num_train_epochs=1.0,
@@ -443,7 +453,7 @@ def main(cfg):
         remove_unused_columns=False,
         dataloader_num_workers=0,
         dataloader_pin_memory=True,
-        gradient_checkpointing=True,
+        gradient_checkpointing=gradient_checkpointing,
         max_length=cfg.max_seq_length,
         packing=False,
         bf16=torch.cuda.is_available() and torch.cuda.is_bf16_supported(),
