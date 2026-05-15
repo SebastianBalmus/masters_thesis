@@ -93,12 +93,19 @@ def build_fsdp_training_args(cfg, model=None) -> dict:
         raise ValueError("Set use_full: true when enabling FSDP.")
 
     auto_wrap = bool(cfg.get("fsdp_auto_wrap", True))
+    cpu_ram_efficient_loading = bool(
+        cfg.get("fsdp_cpu_ram_efficient_loading", True)
+    )
     fsdp_config = {
         "activation_checkpointing": bool(
             cfg.get("fsdp_activation_checkpointing", auto_wrap)
         ),
         "state_dict_type": "FULL_STATE_DICT",
         "use_orig_params": bool(cfg.get("fsdp_use_orig_params", True)),
+        "cpu_ram_efficient_loading": cpu_ram_efficient_loading,
+        "sync_module_states": bool(
+            cfg.get("fsdp_sync_module_states", cpu_ram_efficient_loading)
+        ),
     }
 
     if not auto_wrap:
@@ -116,6 +123,16 @@ def build_fsdp_training_args(cfg, model=None) -> dict:
             **fsdp_config,
         },
     }
+
+
+def configure_fsdp_loading_environment(cfg) -> None:
+    if not resolve_fsdp_enabled(cfg):
+        return
+    if not bool(cfg.get("fsdp_cpu_ram_efficient_loading", True)):
+        return
+
+    os.environ.setdefault("ACCELERATE_USE_FSDP", "true")
+    os.environ.setdefault("FSDP_CPU_RAM_EFFICIENT_LOADING", "true")
 
 
 def resolve_gradient_checkpointing_enabled(cfg, fsdp_training_args: dict) -> bool:
@@ -345,6 +362,7 @@ def main(cfg):
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
+    configure_fsdp_loading_environment(cfg)
     pipeline = build_pipeline(cfg)
 
     callbacks = []
