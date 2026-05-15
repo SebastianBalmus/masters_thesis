@@ -24,6 +24,7 @@ per_device_eval_batch_size: 4
 gradient_accumulation_steps: 1
 
 learning_rate: 1.0e-4
+optim: adamw_bnb_8bit
 lr_scheduler_type: linear
 warmup_ratio: 0.03
 logging_steps: 10
