@@ -462,7 +462,6 @@ def main(cfg):
         learning_rate=cfg.learning_rate,
         lr_scheduler_type=cfg.lr_scheduler_type,
         warmup_ratio=cfg.warmup_ratio,
-        optim=cfg.get("optim", "adamw_torch"),
         logging_steps=cfg.logging_steps,
         eval_strategy=eval_strategy,
         eval_steps=cfg.eval_steps,

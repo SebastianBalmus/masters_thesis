@@ -9,20 +9,14 @@ seed: 42
 routing_method: linear_mid_start
 
 use_full: true
-full_config:
-  r: 16
-  full_alpha: 32
-  target_modules: all-linear
-  full_dropout: 0.05
-
 max_seq_length: 512
 max_new_tokens: 8
 
-per_device_train_batch_size: 4
-per_device_eval_batch_size: 4
+per_device_train_batch_size: 32
+per_device_eval_batch_size: 16
 gradient_accumulation_steps: 1
 
-learning_rate: 1.0e-4
+learning_rate: 5.0e-5
 lr_scheduler_type: linear
 warmup_ratio: 0.03
 logging_steps: 10
