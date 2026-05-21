@@ -2,6 +2,7 @@ import yaml
 import wandb
 import argparse
 import gc
+import os
 from dotmap import DotMap
 
 import torch
@@ -34,9 +35,111 @@ ROUTING_METHOD_FRONTLOADED = "frontloaded"
 ROUTING_METHOD_BACKLOADED = "backloaded"
 ROUTING_METHOD_JUMP_WARMUP = "jump_warmup"
 
+DEFAULT_FSDP_TRANSFORMER_LAYERS = {
+    "qwen": "Qwen2MoeDecoderLayer",
+    "gpt-oss": "GptOssDecoderLayer",
+}
+
 
 def seed_suffix(seed: int) -> str:
     return f"__seed_{int(seed)}"
+
+
+def is_global_main_process() -> bool:
+    return int(os.environ.get("RANK", "0")) == 0
+
+
+def is_distributed_process() -> bool:
+    return int(os.environ.get("WORLD_SIZE", "1")) > 1
+
+
+def resolve_fsdp_enabled(cfg) -> bool:
+    if "fsdp" in cfg:
+        return bool(cfg.fsdp)
+    fsdp_config = cfg.get("fsdp_config", None)
+    if fsdp_config is not None and "enabled" in fsdp_config:
+        return bool(fsdp_config.enabled)
+    return False
+
+
+def resolve_fsdp_transformer_layer_cls(cfg, model=None) -> str:
+    fsdp_config = cfg.get("fsdp_config", None)
+    if fsdp_config is not None and fsdp_config.get("transformer_layer_cls_to_wrap"):
+        return str(fsdp_config.transformer_layer_cls_to_wrap)
+
+    no_split_modules = getattr(model, "_no_split_modules", None)
+    if no_split_modules:
+        if isinstance(no_split_modules, str):
+            return no_split_modules
+        return str(sorted(no_split_modules)[0])
+
+    model_id = str(cfg.model_id).lower()
+    for key, layer_cls in DEFAULT_FSDP_TRANSFORMER_LAYERS.items():
+        if key in model_id:
+            return layer_cls
+
+    raise ValueError(
+        "FSDP requires fsdp_config.transformer_layer_cls_to_wrap for this model."
+    )
+
+
+def build_fsdp_training_args(cfg, model=None) -> dict:
+    if not resolve_fsdp_enabled(cfg):
+        return {}
+
+    if cfg.get("use_lora", False):
+        raise ValueError("FSDP is only supported for full fine-tuning in this script.")
+    if not bool(cfg.get("use_full", False)):
+        raise ValueError("Set use_full: true when enabling FSDP.")
+
+    auto_wrap = bool(cfg.get("fsdp_auto_wrap", True))
+    cpu_ram_efficient_loading = bool(
+        cfg.get("fsdp_cpu_ram_efficient_loading", True)
+    )
+    fsdp_config = {
+        "activation_checkpointing": bool(
+            cfg.get("fsdp_activation_checkpointing", auto_wrap)
+        ),
+        "state_dict_type": "FULL_STATE_DICT",
+        "use_orig_params": bool(cfg.get("fsdp_use_orig_params", True)),
+        "cpu_ram_efficient_loading": cpu_ram_efficient_loading,
+        "sync_module_states": bool(
+            cfg.get("fsdp_sync_module_states", cpu_ram_efficient_loading)
+        ),
+    }
+
+    if not auto_wrap:
+        return {
+            "fsdp": "full_shard",
+            "fsdp_config": fsdp_config,
+        }
+
+    fsdp_config["transformer_layer_cls_to_wrap"] = resolve_fsdp_transformer_layer_cls(
+        cfg, model=model
+    )
+    return {
+        "fsdp": "full_shard auto_wrap",
+        "fsdp_config": {
+            **fsdp_config,
+        },
+    }
+
+
+def configure_fsdp_loading_environment(cfg) -> None:
+    if not resolve_fsdp_enabled(cfg):
+        return
+    if not bool(cfg.get("fsdp_cpu_ram_efficient_loading", True)):
+        return
+
+    os.environ.setdefault("ACCELERATE_USE_FSDP", "true")
+    os.environ.setdefault("FSDP_CPU_RAM_EFFICIENT_LOADING", "true")
+
+
+def resolve_gradient_checkpointing_enabled(cfg, fsdp_training_args: dict) -> bool:
+    fsdp_config = fsdp_training_args.get("fsdp_config", {})
+    if bool(fsdp_config.get("activation_checkpointing", False)):
+        return False
+    return bool(cfg.get("gradient_checkpointing", True))
 
 
 def resolve_routing_method(cfg):
@@ -246,7 +349,7 @@ def main(cfg):
     ):
         cfg.wandb_config.name = f"{cfg.wandb_config.name}{suffix}"
 
-    if cfg.report_to == "wandb":
+    if cfg.report_to == "wandb" and is_global_main_process():
         wandb.init(
             project=cfg.wandb_config.project,
             name=cfg.wandb_config.name,
@@ -259,6 +362,7 @@ def main(cfg):
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
+    configure_fsdp_loading_environment(cfg)
     pipeline = build_pipeline(cfg)
 
     callbacks = []
@@ -345,6 +449,10 @@ def main(cfg):
     callbacks.append(tracking_callback)
     eval_strategy = "steps" if enable_task_metrics else "epoch"
 
+    fsdp_training_args = build_fsdp_training_args(cfg, model=pipeline["model"])
+    gradient_checkpointing = resolve_gradient_checkpointing_enabled(
+        cfg, fsdp_training_args
+    )
     training_args = SFTConfig(
         output_dir=cfg.output_dir,
         num_train_epochs=1.0,
@@ -354,20 +462,22 @@ def main(cfg):
         learning_rate=cfg.learning_rate,
         lr_scheduler_type=cfg.lr_scheduler_type,
         warmup_ratio=cfg.warmup_ratio,
+        optim=cfg.get("optim", "adamw_torch"),
         logging_steps=cfg.logging_steps,
         eval_strategy=eval_strategy,
         eval_steps=cfg.eval_steps,
         save_strategy="no",
         save_steps=cfg.eval_steps,
-        report_to=cfg.report_to,
+        report_to=cfg.report_to if is_global_main_process() else "none",
         remove_unused_columns=False,
         dataloader_num_workers=0,
         dataloader_pin_memory=True,
-        gradient_checkpointing=True,
+        gradient_checkpointing=gradient_checkpointing,
         max_length=cfg.max_seq_length,
         packing=False,
         bf16=torch.cuda.is_available() and torch.cuda.is_bf16_supported(),
         fp16=not (torch.cuda.is_available() and torch.cuda.is_bf16_supported()),
+        **fsdp_training_args,
     )
 
     trainer_kwargs = dict(
@@ -392,8 +502,12 @@ def main(cfg):
         if pipeline["peft_config"] is not None
         else f"{cfg.output_dir}/final_model"
     )
-    trainer.model.save_pretrained(final_artifact_dir)
-    pipeline["tokenizer"].save_pretrained(final_artifact_dir)
+    trainer.save_model(final_artifact_dir)
+    if trainer.is_world_process_zero():
+        pipeline["tokenizer"].save_pretrained(final_artifact_dir)
+
+    if is_distributed_process():
+        trainer.accelerator.wait_for_everyone()
 
     if generative_eval_callback is not None:
         generative_eval_callback.force_run_next_eval()
@@ -418,6 +532,11 @@ def main(cfg):
     routing_callback = None
     pipeline = None
     release_training_memory()
+
+    if not is_global_main_process():
+        if wandb.run is not None:
+            wandb.finish()
+        return
 
     final_test_metrics = run_checkpoint_test_eval(
         cfg=cfg,
@@ -460,6 +579,21 @@ if __name__ == "__main__":
         default=None,
         help="Override the training seed from the config file.",
     )
+    parser.add_argument(
+        "--fsdp",
+        action="store_true",
+        help="Enable FSDP full fine-tuning for this run.",
+    )
+    parser.add_argument(
+        "--no-fsdp",
+        action="store_true",
+        help="Disable FSDP even if the config enables it.",
+    )
+    parser.add_argument(
+        "--fsdp-no-auto-wrap",
+        action="store_true",
+        help="Use plain FSDP full_shard without transformer-layer auto-wrap.",
+    )
     args = parser.parse_args()
 
     with open(args.config_path, "r") as f:
@@ -467,5 +601,13 @@ if __name__ == "__main__":
 
     if args.seed is not None:
         cfg["seed"] = args.seed
+    if args.fsdp and args.no_fsdp:
+        raise ValueError("Use only one of --fsdp or --no-fsdp.")
+    if args.fsdp:
+        cfg["fsdp"] = True
+    if args.no_fsdp:
+        cfg["fsdp"] = False
+    if args.fsdp_no_auto_wrap:
+        cfg["fsdp_auto_wrap"] = False
 
     main(cfg)

@@ -89,6 +89,18 @@ python sft.py -c configs/qwen/train/lora/arc_fixed_k_max_lora.yaml --seed 42
 python sft.py -c configs/qwen/train/full_ft/arc_fixed_k_max_full.yaml --seed 42
 ```
 
+For Qwen and GPT-OSS full fine-tuning on two GPUs, launch with Accelerate and
+enable FSDP:
+
+```bash
+accelerate launch --num_processes 2 sft.py -c configs/qwen/train/full_ft/arc_fixed_k_max_full.yaml --seed 42 --fsdp
+accelerate launch --num_processes 2 sft.py -c configs/gpt_oss/train/full_ft/arc_fixed_k_max_full.yaml --seed 42 --fsdp
+```
+
+`./run_all.sh full_ft` automatically uses the Accelerate/FSDP launch for
+`qwen` and `gpt_oss`, while `lfm2` and `olmoe` still run through the normal
+single-process command. Override the GPU count with `FSDP_NUM_PROCESSES=...`.
+
 A training run writes to:
 
 ```text
