@@ -116,7 +116,7 @@ For large full fine-tuning runs, launch with Accelerate and enable FSDP once a
 matching full fine-tuning config exists:
 
 ```bash
-accelerate launch --num_processes 2 sft.py -c configs/olmoe/train/full_ft/arc_fixed_k_max_full.yaml --seed 42 --fsdp
+accelerate launch --num_processes 2 sft.py -c <your_config_path> --seed 42 --fsdp
 ```
 
 `./run_all.sh full_ft` is wired to use the Accelerate/FSDP launch for `qwen`
